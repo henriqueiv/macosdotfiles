@@ -3,8 +3,44 @@
 # ---------
 function gi() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
+# $1 (first param) should be the name of a .m4a input file, with .m4a extension
+# $2 should be name of output file, with extension
+function normalizeAudio {
+	INPUTFILE=$1
+	OUTPUTFILE=$2
+
+	DBLEVEL=`ffmpeg -i "${INPUTFILE}" -vn -af "volumedetect" -f null /dev/null 2>&1 | grep max_volume | awk -F': ' '{print $2}' | cut -d' ' -f1`
+
+	# We're only going to increase db level if max volume has negative db level.
+	# Bash doesn't do floating comparison directly
+	COMPRESULT=`echo ${DBLEVEL}'<'0 | bc -l`
+	if [ ${COMPRESULT} -eq 1 ]; then
+		DBLEVEL=`echo "-(${DBLEVEL})" | bc -l`
+		BITRATE=`ffmpeg -i "${INPUTFILE}" 2>&1 | grep Audio | awk -F', ' '{print $5}' | cut -d' ' -f1`
+
+		echo "Normalizing audio applying" $DBLEVEL"db gain"
+
+		# echo $DBLEVEL
+		# echo $BITRATE
+
+		ffmpeg -i "${INPUTFILE}" -af "volume=${DBLEVEL}dB" -c:v copy -c:a aac -strict experimental -b:a ${BITRATE}k ${OUTPUTFILE} -loglevel quiet
+
+	else
+		echo "Already at max db level:" $DBLEVEL "just copying exact file"
+		cp ${INPUTFILE} ${OUTPUTFILE}
+	fi
+}
+
 function wav2mp3() {
-	ffmpeg -i "$1" -vn -ar 44100 -ac 2 -ab 192k -f mp3 "$2"
+	if exists ffmpeg ; then
+		ffmpeg -i "$1" -vn -ar 44100 -ac 2 -ab 192k -f mp3 "$2"
+	fi
+}
+
+function testezao() {
+	if $(exists foo) == 1 ; then
+		ffmpeg -i "$1" -vn -ar 44100 -ac 2 -ab 192k -f mp3 "$2";
+	fi
 }
 
 function ytmp3() {
@@ -88,17 +124,18 @@ alias clrss="find ~/Desktop -name \"Screen Shot *.png\" |
   xargs -0 rm -f"
 alias oyt="open ~/Downloads/Youtube/"
 alias clrdd="rm -rf ~/Library/Developer/Xcode/DerivedData/"
-alias makeexec="chmod a+x "
+alias mkexec="chmod a+x "
 
 # ------------
 # Git Shortcuts
 # ------------
+alias gd='git diff'
 alias gs='git status'
 alias gst='git status -sb'
 alias ga='git add'
 alias gau='git add -u' # Removes deleted files
-alias gpull='git pull'
-alias gpush='git push'
+alias gpl='git pull'
+alias gps='git push'
 alias gc='git commit -v'
 alias gcm='git commit -v -m' # With message
 alias gca='git commit -v -a' # Does both add and commit in same command, add -m 'blah' for comment
